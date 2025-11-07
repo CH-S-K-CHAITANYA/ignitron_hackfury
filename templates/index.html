@@ -1,0 +1,505 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Mappls Hub Routing (Flask)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Mappls SDK key -->
+    <script>
+      const MAPPLS_KEY = "617a4174-2a67-46aa-83ab-ed187251c0e4";
+    </script>
+
+    <!-- Mappls SDK and plugins -->
+    <script src="https://apis.mappls.com/advancedmaps/api/b68ac432-6505-48df-8a78-235a8b9966e1/map_sdk?layer=vector&v=3.0&callback=initMap1" async></script>
+    <script src="https://apis.mappls.com/advancedmaps/api/b68ac432-6505-48df-8a78-235a8b9966e1/map_sdk_plugins?v=3.0" async></script>
+
+    <style>
+      /* Modern font stack and reset */
+      body {
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        color: #333;
+        overflow: hidden; /* Prevent scrollbars on full-screen map */
+      }
+
+      /* Full-screen map with subtle overlay */
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 1;
+      }
+
+      /* Stylish controls panel (back to top-right) */
+      .controls {
+        position: absolute;
+        top: 20px;
+        right: 20px; /* Back to right side */
+        width: 340px;
+        max-width: 90vw; /* Responsive for mobile */
+        background: linear-gradient(145deg, #ffffff 0%, #f0f4f8 100%);
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 4px 16px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px); /* Subtle glass effect */
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .controls:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+      }
+
+      .controls h4 {
+        margin: 0 0 15px 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #2c3e50;
+        text-align: center;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 8px;
+      }
+
+      .controls select,
+      .controls input,
+      .controls button {
+        width: 100%;
+        margin-bottom: 12px;
+        padding: 12px;
+        box-sizing: border-box;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .controls select:focus,
+      .controls input:focus {
+        outline: none;
+        border-color: #3498db;
+        box-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
+      }
+
+      .controls button {
+        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        transition: background 0.3s ease, transform 0.2s ease;
+      }
+
+      .controls button:hover {
+        background: linear-gradient(135deg, #2980b9 0%, #21618c 100%);
+        transform: translateY(-1px);
+      }
+
+      .controls button:active {
+        transform: translateY(0);
+      }
+
+      .status {
+        font-size: 13px;
+        color: #7f8c8d;
+        text-align: center;
+        margin: 10px 0;
+        font-weight: 500;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 6px;
+        border: 1px solid #ecf0f1;
+      }
+
+      .hub-list {
+        max-height: 150px;
+        overflow-y: auto;
+        margin-top: 12px;
+        font-size: 13px;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 8px;
+        border: 1px solid #ecf0f1;
+        scrollbar-width: thin;
+        scrollbar-color: #bdc3c7 #ecf0f1;
+      }
+
+      .hub-list::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .hub-list::-webkit-scrollbar-track {
+        background: #ecf0f1;
+        border-radius: 3px;
+      }
+
+      .hub-list::-webkit-scrollbar-thumb {
+        background: #bdc3c7;
+        border-radius: 3px;
+      }
+
+      .hub-list strong {
+        color: #2c3e50;
+        font-weight: 600;
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 768px) {
+        .controls {
+          width: 90vw;
+          top: 10px;
+          right: 10px; /* Adjusted for mobile */
+          padding: 15px;
+        }
+
+        .controls h4 {
+          font-size: 16px;
+        }
+
+        .controls select,
+        .controls input,
+        .controls button {
+          padding: 10px;
+          font-size: 13px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+
+    <div class="controls">
+      <h4>Hub Routing</h4>
+      <select id="source-hub">
+        <option value="">Select starting hub</option>
+      </select>
+      <input
+        id="dest-address"
+        placeholder="Enter destination address (e.g. Whitefield, Bengaluru)"
+      />
+      <button id="run-opt">Calculate optimized route</button>
+      <div class="status" id="status">Status: Idle</div>
+      <div class="hub-list" id="selected-hubs"></div>
+    </div>
+
+    <script>
+      // globals
+      let map, direction_plugin;
+      let hubs = [];
+      let markers = []; // {id, marker}
+      let routeLine = null;
+      let routeMarkers = [];
+
+      // Called by the Mappls SDK callback param: callback=initMap1
+      async function initMap1() {
+        try {
+          map = new mappls.Map("map", { center: [12.97, 77.59], zoom: 11 });
+        } catch (e) {
+          console.error("Map init failed:", e);
+          document.getElementById("status").textContent = "Map initialization failed.";
+          return;
+        }
+
+        await loadHubs();
+        hubs.forEach((h) => addHubMarker(h));
+        initDirectionPlugin();
+        document.getElementById("run-opt").addEventListener("click", runOptimization);
+
+        console.info("Map initialized. Hubs loaded:", hubs.length);
+      }
+
+      async function loadHubs() {
+        try {
+          const res = await fetch("/api/hubs");
+          const data = await res.json();
+          hubs = data.hubs || [];
+          const select = document.getElementById("source-hub");
+          hubs.forEach((h) => {
+            const opt = document.createElement("option");
+            opt.value = h.id;
+            opt.textContent = `${h.name} (${h.load_percent}% load)`;
+            select.appendChild(opt);
+          });
+        } catch (e) {
+          console.error("Failed to load hubs", e);
+          hubs = [];
+          document.getElementById("status").textContent = "Failed to load hubs from server.";
+        }
+      }
+
+      function addHubMarker(h) {
+        const color =
+          h.load_percent <= 40
+            ? "#28a745"
+            : h.load_percent <= 75
+            ? "#ffc107"
+            : "#dc3545";
+
+        try {
+          const marker = new mappls.Marker({
+            map,
+            position: { lat: h.lat, lng: h.lng },
+            popupHtml: `<b>${h.name}</b><br>Load: ${h.load_percent}%`,
+            color,
+            title: h.name,
+          });
+
+          markers.push({ id: h.id, marker });
+        } catch (err) {
+          console.warn("Marker creation failed for hub:", h, err);
+        }
+      }
+
+      function initDirectionPlugin() {
+        const direction_option = {
+          map: map,
+          location: [12.97, 77.59],
+          divWidth: "360px",
+          isDraggable: false,
+          start_location: true,
+          end_location: true,
+          closeBtn: false,
+          search: true,
+          Profile: ["driving"],
+        };
+
+        try {
+          mappls.direction(direction_option, function (data) {
+            direction_plugin = data;
+            console.info("✅ Mappls direction plugin initialized");
+          });
+        } catch (err) {
+          console.warn("Direction plugin init failed:", err);
+        }
+      }
+
+      async function runOptimization() {
+        const sourceId = document.getElementById("source-hub").value;
+        const address = document.getElementById("dest-address").value.trim();
+
+        if (!sourceId) {
+          alert("Choose a start hub");
+          return;
+        }
+        if (!address) {
+          alert("Enter destination address");
+          return;
+        }
+
+        document.getElementById("status").textContent = "Status: Geocoding destination...";
+
+        try {
+          const geoRes = await fetch("/api/geocode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ address }),
+          });
+
+          if (!geoRes.ok) {
+            const err = await geoRes.json().catch(() => ({}));
+            document.getElementById(
+              "status"
+            ).textContent = `Geocode error: ${err.error || geoRes.statusText}`;
+            return;
+          }
+
+          const geoJson = await geoRes.json();
+          const dest = { lat: geoJson.lat, lng: geoJson.lng };
+          document.getElementById("status").textContent = `Destination located (${geoJson.display_name}) — optimizing...`;
+
+          const payload = {
+            sourceHubId: sourceId,
+            destination: dest,
+            max_hops: 20,
+            range_km: 10,
+            load_threshold: 66,
+          };
+
+          const res = await fetch("/api/optimize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const json = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            document.getElementById("status").textContent = `Optimization error: ${json.error || res.statusText}`;
+            console.error("Optimize failed:", json);
+            return;
+          }
+
+          const selected = json.selected_hubs;
+          if (!selected || selected.length === 0) {
+            document.getElementById("status").textContent = "No route found.";
+            return;
+          }
+
+          // show & draw
+          showSelectedHubs(selected);
+          drawRoute(selected);
+
+          document.getElementById("status").textContent = `Status: Optimized route through ${selected.length - 1} hub(s).`;
+        } catch (err) {
+          console.error("Network/JS error in runOptimization:", err);
+          document.getElementById("status").textContent = "Network error during optimization";
+        }
+      }
+
+      // --- New robust showSelectedHubs + drawRoute implementation ---
+      function showSelectedHubs(list) {
+        const el = document.getElementById("selected-hubs");
+        el.innerHTML =
+          "<strong>Selected hubs:</strong><br>" +
+          list.map((s, i) => `${i + 1}. ${s.name} (${s.load}%)`).join(" → ");
+
+        // color markers and update popups
+        markers.forEach((m) => {
+          const foundIndex = list.findIndex((s) => String(s.id) === String(m.id));
+          if (foundIndex >= 0) {
+            try {
+              m.marker.setColor("#dc3545"); // red
+              m.marker.setPopupHtml(`<b>${list[foundIndex].name}</b><br>Load: ${list[foundIndex].load}%<br>Order: ${foundIndex + 1}`);
+            } catch (e) {}
+          } else {
+            try {
+              m.marker.setColor("#28a745"); // green
+              // restore simple popup
+              m.marker.setPopupHtml(`<b>${m.marker?.options?.title || "Hub"}</b>`);
+            } catch (e) {}
+          }
+        });
+      }
+
+      function drawRoute(selected_hubs) {
+        // cleanup previous visuals
+        if (routeLine) {
+          try { routeLine.remove(); } catch (e) {}
+          routeLine = null;
+        }
+        routeMarkers.forEach((rm) => {
+          try { rm.remove(); } catch (e) {}
+        });
+        routeMarkers = [];
+
+        if (!selected_hubs || selected_hubs.length < 2) {
+          console.warn("Not enough hubs to draw a route");
+          return;
+        }
+
+        // prepare coords array [lat,lng]
+        const coords = selected_hubs.map(h => [Number(h.lat), Number(h.lng)]);
+
+        // fit map helper
+        function fitMapToCoords(coordList) {
+          try {
+            const bounds = new mappls.LatLngBounds();
+            coordList.forEach(c => bounds.extend(new mappls.LatLng(c[0], c[1])));
+            map.fitBounds(bounds, { padding: 60 });
+          } catch (e) {
+            // fallback center
+            const mid = coordList[Math.floor(coordList.length / 2)];
+            try { map.setCenter(mid); } catch (err) {}
+          }
+        }
+
+        // add numbered route markers
+        coords.forEach((c, idx) => {
+          try {
+            const m = new mappls.Marker({
+              map,
+              position: { lat: c[0], lng: c[1] },
+              popupHtml: `${idx + 1}. ${selected_hubs[idx].name || (idx === coords.length - 1 ? "Destination" : "Hub")}`,
+              title: `${idx + 1}`,
+            });
+            routeMarkers.push(m);
+          } catch (e) {
+            // ignore
+          }
+        });
+
+        // Try plugin first
+        if (direction_plugin && typeof direction_plugin.showRouteOnMap === "function") {
+          const start = `${coords[0][0]},${coords[0][1]}`;
+          const end = `${coords[coords.length - 1][0]},${coords[coords.length - 1][1]}`;
+          const waypointsArr = coords.slice(1, -1).map(c => `${c[0]},${c[1]}`);
+          const waypointsStr = waypointsArr.join(";");
+
+          try {
+            direction_plugin.showRouteOnMap({
+              start,
+              end,
+              waypoints: waypointsStr,
+              resource: "route_traffic",
+              alternatives: false,
+              profile: "driving",
+              callback: function (response) {
+                console.log("Mappls routing response:", response);
+                try {
+                  if (response && (response.code === "200" || response.code === 200)) {
+                    // plugin probably drew the route; try to use its bounds if present
+                    if (response.result && response.result.bounds) {
+                      const b = response.result.bounds;
+                      if (Array.isArray(b) && b.length >= 4) {
+                        const bounds = new mappls.LatLngBounds(
+                          new mappls.LatLng(b[0], b[1]),
+                          new mappls.LatLng(b[2], b[3])
+                        );
+                        map.fitBounds(bounds, { padding: 60 });
+                      } else {
+                        fitMapToCoords(coords);
+                      }
+                    } else {
+                      fitMapToCoords(coords);
+                    }
+                    document.getElementById("status").textContent = `✅ Route drawn through ${selected_hubs.length - 2} hub(s).`;
+                    return;
+                  }
+                } catch (err) {
+                  console.warn("Error processing plugin response:", err);
+                }
+
+                // If plugin response not usable -> fallback
+                console.warn("Plugin did not return a valid route; falling back to polyline.");
+                drawPolylineFallback(coords);
+              }
+            });
+            return; // wait for plugin callback
+          } catch (err) {
+            console.warn("direction_plugin.showRouteOnMap threw an error; using fallback:", err);
+            drawPolylineFallback(coords);
+            return;
+          }
+        }
+
+        // No plugin -> fallback polyline
+        drawPolylineFallback(coords);
+
+        function drawPolylineFallback(coordList) {
+          try {
+            const latlngs = coordList.map(c => new mappls.LatLng(c[0], c[1]));
+            routeLine = new mappls.Polyline({
+              map,
+              path: latlngs,
+              strokeWeight: 5,
+              strokeOpacity: 0.9,
+            });
+            fitMapToCoords(coordList);
+            document.getElementById("status").textContent = `✅ Fallback polyline drawn through ${selected_hubs.length - 2} hub(s).`;
+          } catch (err) {
+            console.error("Failed to draw fallback polyline:", err);
+            document.getElementById("status").textContent = "⚠ Failed to draw route on map.";
+          }
+        }
+      }
+    </script>
+  </body>
+</html>
